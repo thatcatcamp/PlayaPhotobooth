@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm:*)",
+      "Bash(find:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(./gradlew build:*)"
+    ],
+    "deny": []
+  },
+  "enableAllProjectMcpServers": false
+}
