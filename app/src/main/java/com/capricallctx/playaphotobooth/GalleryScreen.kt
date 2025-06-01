@@ -216,38 +216,6 @@ private fun loadPhotosFromStorage(context: Context): List<File> {
 }
 
 private fun shareViaBluetooth(context: Context, photoFile: File) {
-    try {
-        val bluetoothManager = BluetoothManager(context)
-
-        if (!bluetoothManager.isBluetoothAvailable()) {
-            android.widget.Toast.makeText(
-                context,
-                "Bluetooth not available",
-                android.widget.Toast.LENGTH_SHORT
-            ).show()
-            return
-        }
-
-        // Enable discoverability and start sharing
-        if (context is androidx.activity.ComponentActivity) {
-            bluetoothManager.enableDiscoverability(context)
-        }
-
-        android.widget.Toast.makeText(
-            context,
-            "Bluetooth sharing enabled. Other devices can now connect to receive this photo.",
-            android.widget.Toast.LENGTH_LONG
-        ).show()
-
-        // In a real implementation, you'd handle the async sharing in a coroutine
-        // For now, we'll just show instructions
-    } catch (e: Exception) {
-        android.widget.Toast.makeText(
-            context,
-            "Failed to enable Bluetooth sharing: ${e.message}",
-            android.widget.Toast.LENGTH_SHORT
-        ).show()
-    }
 }
 
 

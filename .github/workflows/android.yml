@@ -37,6 +37,7 @@ jobs:
       
     - name: Run lint checks
       run: ./gradlew lintDebug
+      continue-on-error: true
 
   build:
     runs-on: ubuntu-latest

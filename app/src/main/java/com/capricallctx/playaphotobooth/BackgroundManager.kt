@@ -9,33 +9,31 @@ import android.util.Log
 import java.io.IOException
 
 class BackgroundManager(private val context: Context) {
-    
+
     private var backgroundImages = mutableListOf<Bitmap>()
     private var currentBackgroundIndex = 0
-    
-    // Default Burning Man playa background
-    private val defaultBackground = 0
-    
+
+
     init {
         loadBackgroundImages()
     }
-    
+
     private fun loadBackgroundImages() {
         try {
             // Add default procedural background first
             backgroundImages.add(createBurningManBackground(1080, 1920)) // Common phone resolution
-            
+
             // Load background images from assets
             val assetManager = context.assets
             val assetFiles = assetManager.list("") ?: emptyArray()
-            
+
             // Find all bg*.png files
-            val backgroundFiles = assetFiles.filter { 
-                it.matches(Regex("bg\\d+\\.png", RegexOption.IGNORE_CASE)) 
+            val backgroundFiles = assetFiles.filter {
+                it.matches(Regex("bg\\d+\\.png", RegexOption.IGNORE_CASE))
             }.sorted()
-            
+
             Log.d("BackgroundManager", "Found background files: ${backgroundFiles.joinToString()}")
-            
+
             for (filename in backgroundFiles) {
                 try {
                     assetManager.open(filename).use { inputStream ->
@@ -49,7 +47,7 @@ class BackgroundManager(private val context: Context) {
                     Log.e("BackgroundManager", "Failed to load background: $filename", e)
                 }
             }
-            
+
             Log.d("BackgroundManager", "Total backgrounds loaded: ${backgroundImages.size}")
         } catch (e: Exception) {
             Log.e("BackgroundManager", "Failed to load backgrounds", e)
@@ -59,27 +57,27 @@ class BackgroundManager(private val context: Context) {
             }
         }
     }
-    
+
     fun getCurrentBackground(width: Int, height: Int): Bitmap {
         if (backgroundImages.isEmpty()) {
             return createBurningManBackground(width, height)
         }
-        
+
         val originalBg = backgroundImages[currentBackgroundIndex]
-        
+
         // Scale background to match the required dimensions
         return Bitmap.createScaledBitmap(originalBg, width, height, true)
     }
-    
+
     fun getBackgroundPreview(index: Int, width: Int, height: Int): Bitmap {
         if (index >= backgroundImages.size || index < 0) {
             return createBurningManBackground(width, height)
         }
-        
+
         val originalBg = backgroundImages[index]
         return Bitmap.createScaledBitmap(originalBg, width, height, true)
     }
-    
+
     fun cycleToNextBackground(): Int {
         if (backgroundImages.size > 1) {
             currentBackgroundIndex = (currentBackgroundIndex + 1) % backgroundImages.size
@@ -87,7 +85,7 @@ class BackgroundManager(private val context: Context) {
         Log.d("BackgroundManager", "Switched to background index: $currentBackgroundIndex")
         return currentBackgroundIndex
     }
-    
+
     fun cycleToPreviousBackground(): Int {
         if (backgroundImages.size > 1) {
             currentBackgroundIndex = if (currentBackgroundIndex == 0) {
@@ -99,22 +97,21 @@ class BackgroundManager(private val context: Context) {
         Log.d("BackgroundManager", "Switched to background index: $currentBackgroundIndex")
         return currentBackgroundIndex
     }
-    
-    fun getCurrentBackgroundIndex(): Int = currentBackgroundIndex
-    
+
+
     fun getBackgroundCount(): Int = backgroundImages.size
-    
+
     fun getBackgroundName(index: Int): String {
         return when (index) {
             0 -> "Playa Dust"
             else -> "Background ${index + 1}"
         }
     }
-    
+
     private fun createBurningManBackground(width: Int, height: Int): Bitmap {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        
+
         // Create a gradient from sandy yellow to orange (simulating playa dust and sunset)
         val paint = Paint().apply {
             shader = android.graphics.LinearGradient(
@@ -128,7 +125,7 @@ class BackgroundManager(private val context: Context) {
                 android.graphics.Shader.TileMode.CLAMP
             )
         }
-        
+
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
         return bitmap
     }
