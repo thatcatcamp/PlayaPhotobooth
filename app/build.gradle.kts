@@ -12,8 +12,8 @@ android {
         applicationId = "com.capricallctx.playaphotobooth"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1)
+        versionName = "1.0+${System.getenv("GITHUB_RUN_NUMBER") ?: "1"}"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
