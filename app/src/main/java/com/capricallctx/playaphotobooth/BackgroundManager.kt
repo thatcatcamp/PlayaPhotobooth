@@ -8,7 +8,7 @@ import android.graphics.Paint
 import android.util.Log
 import java.io.IOException
 
-class BackgroundManager(private val context: Context) {
+class BackgroundManager(val context: Context) {
 
     private var backgroundImages = mutableListOf<Bitmap>()
     private var currentBackgroundIndex = 0

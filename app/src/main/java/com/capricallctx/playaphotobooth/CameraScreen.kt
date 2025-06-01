@@ -394,7 +394,7 @@ private suspend fun processBackgroundReplacement(
                 Log.d("CameraScreen", "Segmentation successful, mask width: ${segmentationMask.width}, height: ${segmentationMask.height}")
                 Log.d("CameraScreen", "Original bitmap width: ${originalBitmap.width}, height: ${originalBitmap.height}")
 
-                val processedBitmap = replaceBackground(originalBitmap, segmentationMask, backgroundManager, selectedBackgroundIndex)
+                val processedBitmap = replaceBackgroundImproved(originalBitmap, segmentationMask, backgroundManager, selectedBackgroundIndex)
                 continuation.resume(processedBitmap)
             } catch (e: Exception) {
                 Log.e("CameraScreen", "Background replacement failed", e)
@@ -429,8 +429,9 @@ private fun replaceBackground(
     val backgroundPixels = IntArray(width * height)
     backgroundBitmap.getPixels(backgroundPixels, 0, width, 0, 0, width, height)
 
-    // Get mask data
+    // Get mask data - ensure buffer is rewound to start
     val maskBuffer = mask.buffer
+    maskBuffer.rewind()
     val maskArray = ByteArray(maskBuffer.remaining())
     maskBuffer.get(maskArray)
 
@@ -442,29 +443,170 @@ private fun replaceBackground(
     val maskHeight = mask.height
 
     Log.d("CameraScreen", "Mask dimensions: ${maskWidth}x${maskHeight}, Image dimensions: ${width}x${height}")
+    Log.d("CameraScreen", "Mask array size: ${maskArray.size}, Expected: ${maskWidth * maskHeight}")
 
-    // Apply mask pixel by pixel
+    // Debug mask values
+    val sampleMaskValues = mutableListOf<Int>()
+    for (i in 0 until minOf(100, maskArray.size)) {
+        sampleMaskValues.add(maskArray[i].toInt() and 0xFF)
+    }
+    Log.d("CameraScreen", "Sample mask values: $sampleMaskValues")
+
+    // Count mask value distribution
+    var zeroCount = 0
+    var lowCount = 0  // 1-127
+    var highCount = 0 // 128-255
+    for (i in maskArray.indices) {
+        val value = maskArray[i].toInt() and 0xFF
+        when {
+            value == 0 -> zeroCount++
+            value < 128 -> lowCount++
+            else -> highCount++
+        }
+    }
+    Log.d("CameraScreen", "Mask value distribution - Zero: $zeroCount, Low (1-127): $lowCount, High (128-255): $highCount")
+
+    // Try different interpretation: ML Kit might use float format or different byte order
+    try {
+        // Method 1: Direct pixel mapping without scaling if dimensions match
+        if (maskWidth == width && maskHeight == height && maskArray.size == width * height) {
+            Log.d("CameraScreen", "Using direct pixel mapping")
+            for (i in originalPixels.indices) {
+                val maskValue = maskArray[i].toInt() and 0xFF
+                // Try both conventions: high value = person vs low value = person
+                val isPersonHighValue = maskValue > 128
+                val isPersonLowValue = maskValue < 128
+
+                // Log a few samples to see which makes more sense
+                if (i < 10) {
+                    Log.d("CameraScreen", "Pixel $i: maskValue=$maskValue, highValue=$isPersonHighValue, lowValue=$isPersonLowValue")
+                }
+
+                // For now, try the inverted approach since the original wasn't working
+                resultPixels[i] = if (maskValue < 128) {  // LOW values = person
+                    originalPixels[i]
+                } else {  // HIGH values = background
+                    backgroundPixels[i]
+                }
+            }
+        } else {
+            // Method 2: Bilinear interpolation for scaling
+            Log.d("CameraScreen", "Using scaled mapping with bilinear interpolation")
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    val imageIndex = y * width + x
+
+                    // Use bilinear interpolation for better scaling
+                    val maskXFloat = x.toFloat() * (maskWidth - 1) / (width - 1)
+                    val maskYFloat = y.toFloat() * (maskHeight - 1) / (height - 1)
+
+                    val maskX1 = maskXFloat.toInt().coerceIn(0, maskWidth - 1)
+                    val maskY1 = maskYFloat.toInt().coerceIn(0, maskHeight - 1)
+                    val maskX2 = (maskX1 + 1).coerceIn(0, maskWidth - 1)
+                    val maskY2 = (maskY1 + 1).coerceIn(0, maskHeight - 1)
+
+                    // Get four corner values
+                    val index1 = maskY1 * maskWidth + maskX1
+                    val index2 = maskY1 * maskWidth + maskX2
+                    val index3 = maskY2 * maskWidth + maskX1
+                    val index4 = maskY2 * maskWidth + maskX2
+
+                    val val1 = if (index1 < maskArray.size) maskArray[index1].toInt() and 0xFF else 0
+                    val val2 = if (index2 < maskArray.size) maskArray[index2].toInt() and 0xFF else 0
+                    val val3 = if (index3 < maskArray.size) maskArray[index3].toInt() and 0xFF else 0
+                    val val4 = if (index4 < maskArray.size) maskArray[index4].toInt() and 0xFF else 0
+
+                    // Simple average for interpolation
+                    val avgMaskValue = (val1 + val2 + val3 + val4) / 4
+
+                    resultPixels[imageIndex] = if (avgMaskValue < 128) {  // LOW values = person
+                        originalPixels[imageIndex]
+                    } else {  // HIGH values = background
+                        backgroundPixels[imageIndex]
+                    }
+                }
+            }
+        }
+    } catch (e: Exception) {
+        Log.e("CameraScreen", "Error in mask processing, using fallback", e)
+        // Fallback: return original image
+        originalBitmap.getPixels(resultPixels, 0, width, 0, 0, width, height)
+    }
+
+    // Set the result pixels to the bitmap
+    resultBitmap.setPixels(resultPixels, 0, width, 0, 0, width, height)
+
+    return resultBitmap
+}
+
+private fun replaceBackgroundImproved(
+    originalBitmap: Bitmap,
+    mask: SegmentationMask,
+    backgroundManager: BackgroundManager,
+    selectedBackgroundIndex: Int
+): Bitmap {
+    val width = originalBitmap.width
+    val height = originalBitmap.height
+
+    // Get the selected background from BackgroundManager
+    val backgroundBitmap = backgroundManager.getBackgroundPreview(selectedBackgroundIndex, width, height)
+
+    val resultBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+
+    // Get original image pixels
+    val originalPixels = IntArray(width * height)
+    originalBitmap.getPixels(originalPixels, 0, width, 0, 0, width, height)
+
+    // Get background pixels
+    val backgroundPixels = IntArray(width * height)
+    backgroundBitmap.getPixels(backgroundPixels, 0, width, 0, 0, width, height)
+
+    // Get mask data - ensure buffer is properly positioned
+    val maskBuffer = mask.buffer
+    maskBuffer.rewind()
+    val maskArray = FloatArray(maskBuffer.remaining() / 4) // ML Kit uses float values
+    maskBuffer.asFloatBuffer().get(maskArray)
+
+    // ML Kit mask dimensions
+    val maskWidth = mask.width
+    val maskHeight = mask.height
+
+    Log.d("CameraScreen", "Improved mask dimensions: ${maskWidth}x${maskHeight}, Image dimensions: ${width}x${height}")
+    Log.d("CameraScreen", "Mask array size: ${maskArray.size}, Expected: ${maskWidth * maskHeight}")
+
+    // Debug mask values
+    val sampleMaskValues = mutableListOf<Float>()
+    for (i in 0 until minOf(20, maskArray.size)) {
+        sampleMaskValues.add(maskArray[i])
+    }
+    Log.d("CameraScreen", "Sample mask values (float): $sampleMaskValues")
+
+    // Create result pixels array
+    val resultPixels = IntArray(width * height)
+
+    // Apply mask with proper float handling
     for (y in 0 until height) {
         for (x in 0 until width) {
             val imageIndex = y * width + x
 
-            // Scale coordinates to mask dimensions
-            val maskX = (x * maskWidth) / width
-            val maskY = (y * maskHeight) / height
+            // Scale coordinates to mask dimensions with proper bounds checking
+            val maskX = (x.toFloat() * maskWidth / width).toInt().coerceIn(0, maskWidth - 1)
+            val maskY = (y.toFloat() * maskHeight / height).toInt().coerceIn(0, maskHeight - 1)
             val maskIndex = maskY * maskWidth + maskX
 
-            // Get mask confidence (0-255, where 255 = person, 0 = background)
-            val maskValue = if (maskIndex < maskArray.size && maskIndex >= 0) {
-                maskArray[maskIndex].toInt() and 0xFF
+            // Get mask confidence as float (0.0 to 1.0)
+            val maskValue = if (maskIndex < maskArray.size) {
+                maskArray[maskIndex]
             } else {
-                0
+                0.0f
             }
 
-            // Threshold: if mask value > 128, it's likely a person
-            resultPixels[imageIndex] = if (maskValue > 155) {
-            originalPixels[imageIndex]  // Keep original pixel (person)
+            // Use threshold of 0.5 for person detection
+            // Higher values = more likely to be person
+            resultPixels[imageIndex] = if (maskValue > 0.5f) {
+                originalPixels[imageIndex]  // Person pixel
             } else {
-              backgroundPixels[imageIndex]  // Use background pixel
+                backgroundPixels[imageIndex]  // Background pixel
             }
         }
     }
@@ -474,7 +616,6 @@ private fun replaceBackground(
 
     return resultBitmap
 }
-
 
 private fun savePhotoToGallery(context: Context, bitmap: Bitmap) {
     try {
