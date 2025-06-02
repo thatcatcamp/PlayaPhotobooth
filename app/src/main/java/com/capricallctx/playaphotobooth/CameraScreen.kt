@@ -1,9 +1,12 @@
 package com.capricallctx.playaphotobooth
 
+import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
@@ -14,13 +17,19 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -109,60 +118,32 @@ private fun CameraContent(onNavigateToGallery: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Top bar
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Background cycling controls
-                if (backgroundManager.getBackgroundCount() > 1) {
-                    Row {
-                        FloatingActionButton(
-                            onClick = {
-                                currentBackgroundIndex = backgroundManager.cycleToPreviousBackground()
-                            },
-                            modifier = Modifier.size(48.dp),
-                            containerColor = MaterialTheme.colorScheme.tertiary
-                        ) {
-                            Text("←", style = MaterialTheme.typography.headlineSmall)
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        // Background info
-                        Card(
-                            modifier = Modifier.padding(vertical = 4.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
-                        ) {
-                            Text(
-                                text = backgroundManager.getBackgroundName(currentBackgroundIndex),
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        FloatingActionButton(
-                            onClick = {
-                                currentBackgroundIndex = backgroundManager.cycleToNextBackground()
-                            },
-                            modifier = Modifier.size(48.dp),
-                            containerColor = MaterialTheme.colorScheme.tertiary
-                        ) {
-                            Text("→", style = MaterialTheme.typography.headlineSmall)
-                        }
+            // Top section with background selector and gallery button
+            Column {
+                // Background preview overlay at the top
+                BackgroundPreviewOverlay(
+                    backgroundManager = backgroundManager,
+                    currentBackgroundIndex = currentBackgroundIndex,
+                    onBackgroundSelected = { index ->
+                        currentBackgroundIndex = index
+                        backgroundManager.currentBackgroundIndex = index
                     }
-                } else {
-                    Spacer(modifier = Modifier.width(1.dp))
-                }
+                )
 
-                FloatingActionButton(
-                    onClick = onNavigateToGallery,
-                    modifier = Modifier.size(56.dp),
-                    containerColor = MaterialTheme.colorScheme.secondary
+                // Gallery button row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.End
                 ) {
-                    Icon(Icons.Default.AccountBox, contentDescription = "Gallery")
+                    FloatingActionButton(
+                        onClick = onNavigateToGallery,
+                        modifier = Modifier.size(56.dp),
+                        containerColor = MaterialTheme.colorScheme.secondary
+                    ) {
+                        Icon(Icons.Default.AccountBox, contentDescription = "Gallery")
+                    }
                 }
             }
 
@@ -416,8 +397,8 @@ private fun replaceBackground(
     val width = originalBitmap.width
     val height = originalBitmap.height
 
-    // Get the selected background from BackgroundManager
-    val backgroundBitmap = backgroundManager.getBackgroundPreview(selectedBackgroundIndex, width, height)
+    // Get the selected background with text overlay from BackgroundManager
+    val backgroundBitmap = backgroundManager.getBackgroundWithTextOverlay(selectedBackgroundIndex, width, height)
 
     val resultBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
 
@@ -548,8 +529,8 @@ private fun replaceBackgroundImproved(
     val width = originalBitmap.width
     val height = originalBitmap.height
 
-    // Get the selected background from BackgroundManager
-    val backgroundBitmap = backgroundManager.getBackgroundPreview(selectedBackgroundIndex, width, height)
+    // Get the selected background with text overlay from BackgroundManager
+    val backgroundBitmap = backgroundManager.getBackgroundWithTextOverlay(selectedBackgroundIndex, width, height)
 
     val resultBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
 
@@ -617,17 +598,102 @@ private fun replaceBackgroundImproved(
     return resultBitmap
 }
 
+@Composable
+private fun BackgroundPreviewOverlay(
+    backgroundManager: BackgroundManager,
+    currentBackgroundIndex: Int,
+    onBackgroundSelected: (Int) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp)
+        ) {
+            Text(
+                text = "Backgrounds",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(
+                    items = (0 until backgroundManager.getBackgroundCount()).toList()
+                ) { index, backgroundIndex ->
+                    val isSelected = backgroundIndex == currentBackgroundIndex
+                    val borderColor = if (isSelected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        Color.Transparent
+                    }
+                    
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.clickable { onBackgroundSelected(backgroundIndex) }
+                    ) {
+                        // Background thumbnail
+                        val thumbnailBitmap = backgroundManager.getBackgroundPreview(backgroundIndex, 80, 120)
+                        Image(
+                            bitmap = thumbnailBitmap.asImageBitmap(),
+                            contentDescription = backgroundManager.getBackgroundName(backgroundIndex),
+                            modifier = Modifier
+                                .size(width = 60.dp, height = 90.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(
+                                    width = if (isSelected) 3.dp else 1.dp,
+                                    color = borderColor,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                        )
+                        
+                        // Background name
+                        Text(
+                            text = backgroundManager.getBackgroundName(backgroundIndex),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 private fun savePhotoToGallery(context: Context, bitmap: Bitmap) {
     try {
         val filename = "playa_photo_${System.currentTimeMillis()}.jpg"
-        val file = File(context.getExternalFilesDir(null), filename)
-
-        FileOutputStream(file).use { out ->
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+        val resolver = context.contentResolver
+        
+        val contentValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/PlayaPhotobooth")
         }
 
-        Log.d("CameraScreen", "Photo saved: ${file.absolutePath}")
+        val imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+        
+        imageUri?.let { uri ->
+            resolver.openOutputStream(uri)?.use { outputStream ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
+                Log.d("CameraScreen", "Photo saved to gallery: $filename")
+            }
+        } ?: run {
+            Log.e("CameraScreen", "Failed to create MediaStore entry")
+        }
     } catch (e: Exception) {
-        Log.e("CameraScreen", "Failed to save photo", e)
+        Log.e("CameraScreen", "Failed to save photo to gallery", e)
     }
 }
