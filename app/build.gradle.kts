@@ -12,15 +12,15 @@ android {
         applicationId = "com.capricallctx.playaphotobooth"
         minSdk = 24
         targetSdk = 35
-        versionCode = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1)
-        versionName = "1.0+${System.getenv("GITHUB_RUN_NUMBER") ?: "1"}"
+        versionCode = getVersionCode()
+        versionName = getVersionName()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
         create("release") {
-            storeFile = file("../keystore.jks")
+            storeFile = file("${project.rootDir}/keystore.jks")
             storePassword = System.getenv("SIGNING_STORE_PASSWORD")
             keyAlias = System.getenv("SIGNING_KEY_ALIAS")
             keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
@@ -84,4 +84,14 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+}
+
+fun getVersionCode(): Int {
+    val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
+    return 1000000 + buildNumber // Start at 1.0.0 (1000000) + build number
+}
+
+fun getVersionName(): String {
+    val buildNumber = System.getenv("GITHUB_RUN_NUMBER") ?: "0"
+    return "1.0+$buildNumber"
 }
