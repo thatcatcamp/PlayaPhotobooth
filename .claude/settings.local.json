@@ -6,7 +6,8 @@
       "Bash(mkdir:*)",
       "Bash(cp:*)",
       "Bash(./gradlew build:*)",
-      "Bash(./gradlew:*)"
+      "Bash(./gradlew:*)",
+      "Bash(ls:*)"
     ],
     "deny": []
   },
