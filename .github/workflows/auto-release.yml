@@ -90,13 +90,29 @@ jobs:
             keyPassword: ${{ secrets.KEY_PASSWORD }}
 
     - name: Upload AAB to Play Store (Internal Track)
+      id: upload_to_play_store
+      continue-on-error: true
       uses: r0adkll/upload-google-play@v1
       with:
         serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
         packageName: com.capricallctx.playaphotobooth
         releaseFiles: ${{ steps.sign_app.outputs.signedReleaseFile }}
-        track: internal # You can change this to 'alpha' or 'beta' for other pre-release tracks
-        status: draft # Use 'draft' to create a draft release that you manually promote in the Play Console
+        track: internal
+        status: draft
+        
+    - name: Play Store Upload Status
+      run: |
+        if [[ "${{ steps.upload_to_play_store.outcome }}" == "success" ]]; then
+          echo "✅ Successfully uploaded to Play Store Internal Track"
+          echo "🔗 Check Google Play Console to promote the draft release"
+        else
+          echo "⚠️ Play Store upload failed - continuing with GitHub release"
+          echo "💡 This is expected for first-time uploads or permission issues"
+          echo "📋 Manual steps required:"
+          echo "   1. Download the AAB from the GitHub release"
+          echo "   2. Upload manually to Google Play Console"
+          echo "   3. Set up service account permissions properly"
+        fi
 
     - name: Create and push Git tag
       if: steps.should_release.outputs.create_release == 'true'
@@ -239,9 +255,22 @@ jobs:
         echo "- **Signed AAB:** [PlayaPhotobooth-v${{ env.VERSION_NAME }}.aab](${{ steps.create_release.outputs.html_url }}) ✅" >> $GITHUB_STEP_SUMMARY
         echo "- **Status:** Production ready for Google Play Store" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ steps.upload_to_play_store.outcome }}" == "success" ]]; then
+          echo "### ✅ Play Store Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
+          echo "- AAB uploaded to Play Store Internal Track" >> $GITHUB_STEP_SUMMARY
+          echo "- Go to [Google Play Console](https://play.google.com/console) to promote draft release" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ⚠️ Play Store Status: FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "- Automatic upload failed (this is normal for first-time setups)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Manual upload required**: Download AAB and upload to Play Console" >> $GITHUB_STEP_SUMMARY
+          echo "- **Setup guide**: See [scripts/verify-play-store-setup.md](./scripts/verify-play-store-setup.md)" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 🚀 Next Steps" >> $GITHUB_STEP_SUMMARY
         echo "1. Download AAB from release page" >> $GITHUB_STEP_SUMMARY
-        echo "2. Upload to Google Play Console or convert to APK for testing" >> $GITHUB_STEP_SUMMARY
+        echo "2. Upload to Google Play Console (manual if auto-upload failed)" >> $GITHUB_STEP_SUMMARY
         echo "3. Test photobooth functionality" >> $GITHUB_STEP_SUMMARY
         echo "4. Deploy for event use" >> $GITHUB_STEP_SUMMARY
 
