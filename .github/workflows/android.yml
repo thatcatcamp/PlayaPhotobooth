@@ -124,36 +124,3 @@ jobs:
         name: release-aab
         path: PlayaPhotobooth-release-*.aab
 
-    - name: Create GitHub Release
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: "v1.0+${{ github.run_number }}"
-        name: "Release v1.0+${{ github.run_number }}"
-        draft: false
-        prerelease: false
-        files: |
-          PlayaPhotobooth-debug-*.apk
-          PlayaPhotobooth-release-*.apk
-          PlayaPhotobooth-debug-*.aab
-          PlayaPhotobooth-release-*.aab
-        body: |
-          ## PlayaPhotobooth Release v1.0+${{ github.run_number }}
-          
-          **Build Number:** ${{ github.run_number }}
-          **Commit:** ${{ github.sha }}
-          
-          ### Downloads
-          #### APK Files (Direct Installation)
-          - **PlayaPhotobooth-release-v1.0+${{ github.run_number }}.apk** - Production ready signed APK
-          - **PlayaPhotobooth-debug-v1.0+${{ github.run_number }}.apk** - Debug version for testing
-          
-          #### AAB Files (App Bundle for Play Store)
-          - **PlayaPhotobooth-release-v1.0+${{ github.run_number }}.aab** - Production ready signed App Bundle
-          - **PlayaPhotobooth-debug-v1.0+${{ github.run_number }}.aab** - Debug App Bundle for testing
-          
-          ### Installation
-          - **APK**: Enable "Install from unknown sources" in your Android settings, then download and install the APK file.
-          - **AAB**: Upload to Google Play Console for distribution through the Play Store.
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

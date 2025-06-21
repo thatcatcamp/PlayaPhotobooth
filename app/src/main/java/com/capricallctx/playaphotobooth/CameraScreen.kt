@@ -57,6 +57,7 @@ import kotlin.coroutines.suspendCoroutine
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun CameraScreen(
+    configuration: com.capricallctx.playaphotobooth.data.PhotoboothConfiguration,
     onNavigateToGallery: () -> Unit
 ) {
     val cameraPermissionState: PermissionState = rememberPermissionState(android.Manifest.permission.CAMERA)
@@ -68,14 +69,14 @@ fun CameraScreen(
     }
 
     if (cameraPermissionState.status.isGranted) {
-        CameraContent(onNavigateToGallery = onNavigateToGallery)
+        CameraContent(configuration = configuration, onNavigateToGallery = onNavigateToGallery)
     } else {
         PermissionDeniedContent(onRequestPermission = { cameraPermissionState.launchPermissionRequest() })
     }
 }
 
 @Composable
-private fun CameraContent(onNavigateToGallery: () -> Unit) {
+private fun CameraContent(configuration: com.capricallctx.playaphotobooth.data.PhotoboothConfiguration, onNavigateToGallery: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -86,7 +87,7 @@ private fun CameraContent(onNavigateToGallery: () -> Unit) {
     var capturedPhoto by remember { mutableStateOf<Bitmap?>(null) }
 
     // Background management
-    val backgroundManager = remember { BackgroundManager(context) }
+    val backgroundManager = remember { BackgroundManager(context, configuration) }
     var currentBackgroundIndex by remember { mutableStateOf(0) }
 
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }

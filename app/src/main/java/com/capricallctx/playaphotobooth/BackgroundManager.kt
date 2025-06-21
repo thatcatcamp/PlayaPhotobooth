@@ -7,7 +7,9 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
+import android.net.Uri
 import android.util.Log
+import com.capricallctx.playaphotobooth.data.PhotoboothConfiguration
 import java.io.IOException
 
 data class BackgroundTextOverlay(
@@ -15,18 +17,17 @@ data class BackgroundTextOverlay(
     val message: String
 )
 
-class BackgroundManager(val context: Context) {
+class BackgroundManager(val context: Context, private val configuration: PhotoboothConfiguration) {
 
     private var backgroundImages = mutableListOf<Bitmap>()
     var currentBackgroundIndex = 0
 
-    private val backgroundTextOverlays = mapOf(
+    private val defaultBackgroundTextOverlays = mapOf(
         0 to BackgroundTextOverlay("BURNING MAN 2025", "Tomorrow, Today."),
         1 to BackgroundTextOverlay("BURNING MAN 2025", "Tomorrow, Today."),
         2 to BackgroundTextOverlay("BURNING MAN 2025", "Tomorrow, Today."),
         3 to BackgroundTextOverlay("BURNING MAN 2025", "I pooped today!")
     )
-
 
     init {
         loadBackgroundImages()
@@ -62,6 +63,23 @@ class BackgroundManager(val context: Context) {
                 }
             }
 
+            Log.d("BackgroundManager", "Default backgrounds loaded: ${backgroundImages.size}")
+            
+            // Load custom backgrounds from configuration
+            for (customBackground in configuration.customBackgrounds) {
+                customBackground.imageUri?.let { uri ->
+                    try {
+                        val bitmap = loadBitmapFromUri(uri)
+                        if (bitmap != null) {
+                            backgroundImages.add(bitmap)
+                            Log.d("BackgroundManager", "Loaded custom background: ${customBackground.id}")
+                        }
+                    } catch (e: Exception) {
+                        Log.e("BackgroundManager", "Failed to load custom background: ${customBackground.id}", e)
+                    }
+                }
+            }
+            
             Log.d("BackgroundManager", "Total backgrounds loaded: ${backgroundImages.size}")
         } catch (e: Exception) {
             Log.e("BackgroundManager", "Failed to load backgrounds", e)
@@ -69,6 +87,17 @@ class BackgroundManager(val context: Context) {
             if (backgroundImages.isEmpty()) {
                 backgroundImages.add(createBurningManBackground(1080, 1920))
             }
+        }
+    }
+    
+    private fun loadBitmapFromUri(uri: Uri): Bitmap? {
+        return try {
+            context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                BitmapFactory.decodeStream(inputStream)
+            }
+        } catch (e: Exception) {
+            Log.e("BackgroundManager", "Failed to load bitmap from URI: $uri", e)
+            null
         }
     }
 
@@ -116,17 +145,50 @@ class BackgroundManager(val context: Context) {
     fun getBackgroundCount(): Int = backgroundImages.size
 
     fun getBackgroundName(index: Int): String {
-        return when (index) {
-            0 -> "Playa Dust"
-            1 -> "The Burn"
-            2 -> "OMG MUD"
-            3 -> "Poop Today"
-            else -> "Background ${index + 1}"
+        // Calculate stock backgrounds count
+        val stockBackgroundsCount = backgroundImages.size - configuration.customBackgrounds.size
+        
+        return if (index < stockBackgroundsCount) {
+            // Stock backgrounds
+            when (index) {
+                0 -> "Playa Dust"
+                1 -> "The Burn" 
+                2 -> "OMG MUD"
+                3 -> "Poop Today"
+                else -> "Background ${index + 1}"
+            }
+        } else {
+            // Custom backgrounds
+            val customIndex = index - stockBackgroundsCount
+            if (customIndex < configuration.customBackgrounds.size) {
+                val customBg = configuration.customBackgrounds[customIndex]
+                customBg.tagline.takeIf { it.isNotBlank() } ?: "Custom ${customIndex + 1}"
+            } else {
+                "Background ${index + 1}"
+            }
         }
     }
 
     fun getBackgroundTextOverlay(index: Int): BackgroundTextOverlay {
-        return backgroundTextOverlays[index] ?: BackgroundTextOverlay("BURNING MAN 2025", "Tomorrow, Today.")
+        // Calculate stock backgrounds count
+        val stockBackgroundsCount = backgroundImages.size - configuration.customBackgrounds.size
+        
+        return if (index < stockBackgroundsCount) {
+            // Use default overlays for stock backgrounds
+            defaultBackgroundTextOverlays[index] ?: BackgroundTextOverlay("BURNING MAN 2025", "Tomorrow, Today.")
+        } else {
+            // Use custom taglines for custom backgrounds
+            val customIndex = index - stockBackgroundsCount
+            if (customIndex < configuration.customBackgrounds.size) {
+                val customBg = configuration.customBackgrounds[customIndex]
+                BackgroundTextOverlay(
+                    legend = configuration.campName,
+                    message = customBg.tagline.takeIf { it.isNotBlank() } ?: "Welcome to ${configuration.campName}!"
+                )
+            } else {
+                BackgroundTextOverlay(configuration.campName, "Welcome to ${configuration.campName}!")
+            }
+        }
     }
 
     fun getBackgroundWithTextOverlay(index: Int, width: Int, height: Int): Bitmap {

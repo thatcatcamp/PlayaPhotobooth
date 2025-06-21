@@ -41,3 +41,27 @@ This is an Android application built with:
 - ProGuard configured for release builds (currently disabled)
 
 The project follows standard Android project structure with separate source sets for main code, unit tests, and instrumented tests.
+
+## GitHub Actions & Deployment
+
+### Workflows
+- **android.yml** - CI/testing pipeline that builds APKs + AABs and uploads artifacts
+- **auto-release.yml** - Production pipeline that creates GitHub releases and deploys to Google Play Store
+
+### Required GitHub Secrets
+The following secrets must be configured in GitHub repository settings for automated deployment:
+
+#### Android Signing
+- `KEYSTORE_BASE64` - Base64 encoded Android keystore file
+- `KEY_ALIAS` - Signing key alias
+- `KEY_PASSWORD` - Key password
+- `KEYSTORE_PASSWORD` - Keystore password
+
+#### Google Play Store Integration
+- `PLAY_STORE_SERVICE_ACCOUNT_JSON` - Google Play Console service account JSON key
+
+### Deployment Strategy
+- **Push to main branch** → Triggers auto-release workflow
+- **Builds signed AAB** → Uploads to Google Play Store internal track as draft
+- **Creates GitHub release** → With comprehensive release notes and AAB download
+- **Manual promotion required** → Draft releases must be manually promoted in Play Console
